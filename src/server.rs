@@ -16,9 +16,12 @@ use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::mem::size_of;
+use std::os::fd::BorrowedFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use vhost::vhost_user::message::{VhostUserMMap, VhostUserMMapFlags};
+use vhost::vhost_user::{Backend, VhostUserFrontendReqHandler};
 use vm_memory::ByteValued;
 
 const FUSE_BUFFER_HEADER_SIZE: u32 = 0x1000;
@@ -100,11 +103,11 @@ impl<F: FileSystem + Sync> Server<F> {
     }
 
     #[allow(clippy::cognitive_complexity)]
-    pub fn handle_message<T>(
+    pub fn handle_message(
         &self,
         mut r: Reader,
         w: Writer,
-        vu_req: Option<&mut T>,
+        vu_req: Option<&mut Backend>,
     ) -> Result<usize> {
         let in_header: InHeader = r.read_obj().map_err(Error::DecodeMessage)?;
 
@@ -185,32 +188,95 @@ impl<F: FileSystem + Sync> Server<F> {
         }
     }
 
-    fn setupmapping<T>(
+    fn setupmapping(
         &self,
         in_header: InHeader,
-        _r: Reader,
+        mut r: Reader,
         w: Writer,
-        _vu_req: Option<&mut T>,
+        vu_req: Option<&mut Backend>,
     ) -> Result<usize> {
-        reply_error(
-            io::Error::from_raw_os_error(libc::ENOSYS),
-            in_header.unique,
-            w,
-        )
+        let SetupmappingIn {
+            fh,
+            foffset,
+            len,
+            flags,
+            moffset,
+        } = r.read_obj().map_err(Error::DecodeMessage)?;
+
+        let Some(vu_req) = vu_req else {
+            return reply_error(
+                io::Error::from_raw_os_error(libc::ENOSYS),
+                in_header.unique,
+                w,
+            );
+        };
+
+        let flags = SetupmappingFlags::from_bits_truncate(flags);
+        match self.fs.setupmapping(
+            Context::from(in_header),
+            in_header.nodeid.into(),
+            fh.into(),
+            foffset,
+            len,
+            flags,
+        ) {
+            Ok((fd, fd_offset)) => {
+                let mmap_flags = if flags.contains(SetupmappingFlags::WRITE) {
+                    VhostUserMMapFlags::WRITABLE
+                } else {
+                    VhostUserMMapFlags::empty()
+                };
+                let request = VhostUserMMap {
+                    shmid: 0,
+                    padding: [0; 7],
+                    fd_offset,
+                    shm_offset: moffset,
+                    len,
+                    flags: mmap_flags.bits(),
+                };
+                let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+                match vu_req.shmem_map(&request, &fd) {
+                    Ok(_) => reply_ok(None::<u8>, None, in_header.unique, w),
+                    Err(e) => reply_error(e, in_header.unique, w),
+                }
+            }
+            Err(e) => reply_error(e, in_header.unique, w),
+        }
     }
 
-    fn removemapping<T>(
+    fn removemapping(
         &self,
         in_header: InHeader,
-        _r: Reader,
+        mut r: Reader,
         w: Writer,
-        _vu_req: Option<&mut T>,
+        vu_req: Option<&mut Backend>,
     ) -> Result<usize> {
-        reply_error(
-            io::Error::from_raw_os_error(libc::ENOSYS),
-            in_header.unique,
-            w,
-        )
+        let RemovemappingIn { count } = r.read_obj().map_err(Error::DecodeMessage)?;
+
+        let Some(vu_req) = vu_req else {
+            return reply_error(
+                io::Error::from_raw_os_error(libc::ENOSYS),
+                in_header.unique,
+                w,
+            );
+        };
+
+        for _ in 0..count {
+            let RemovemappingOne { moffset, len } = r.read_obj().map_err(Error::DecodeMessage)?;
+            let request = VhostUserMMap {
+                shmid: 0,
+                padding: [0; 7],
+                fd_offset: 0,
+                shm_offset: moffset,
+                len,
+                flags: 0,
+            };
+            if let Err(e) = vu_req.shmem_unmap(&request) {
+                return reply_error(e, in_header.unique, w);
+            }
+        }
+
+        reply_ok(None::<u8>, None, in_header.unique, w)
     }
 
     fn lookup(&self, in_header: InHeader, mut r: Reader, w: Writer) -> Result<usize> {
