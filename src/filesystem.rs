@@ -4,6 +4,7 @@
 
 use std::ffi::{CStr, CString};
 use std::fs::File;
+use std::os::fd::RawFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,7 +13,10 @@ use std::{io, mem};
 use crate::soft_idmap::{GuestGid, GuestUid};
 use crate::{fuse, oslib};
 
-pub use fuse::{FsOptions, OpenOptions, RemovemappingOne, SetattrValid, SetxattrFlags, ROOT_ID};
+pub use fuse::{
+    FsOptions, OpenOptions, RemovemappingOne, SetattrValid, SetupmappingFlags, SetxattrFlags,
+    ROOT_ID,
+};
 
 /// Information about a path in the filesystem.
 pub struct Entry {
@@ -1014,6 +1018,19 @@ pub trait FileSystem {
 
     /// TODO: support this
     fn tmpfile(&self) -> io::Result<(Entry, Option<Self::Handle>, OpenOptions)> {
+        Err(io::Error::from_raw_os_error(libc::ENOSYS))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn setupmapping(
+        &self,
+        ctx: Context,
+        inode: Self::Inode,
+        handle: Self::Handle,
+        foffset: u64,
+        len: u64,
+        flags: SetupmappingFlags,
+    ) -> io::Result<(RawFd, u64)> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 }
