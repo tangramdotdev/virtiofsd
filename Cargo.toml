@@ -34,8 +34,8 @@ libseccomp-sys = { version = "0.2", optional = true }
 clap = { version = "4", features = ["derive"] }
 postcard = { version = "1.0", features = ["use-std"] }
 serde = { version = "1.0", features = ["derive"] }
-vhost-user-backend = "0.21.0"
-vhost = "0.15.0"
+vhost-user-backend = "0.22.0"
+vhost = "0.16.0"
 virtio-bindings = "0.2.7"
 vm-memory = { version = "=0.17.1", features = ["backend-mmap", "backend-atomic"] }
 virtio-queue = "0.17.0"
