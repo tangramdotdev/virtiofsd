@@ -396,6 +396,7 @@ struct PremigrationThread {
 pub struct VhostUserFsBackendBuilder {
     thread_pool_size: usize,
     tag: Option<String>,
+    dax_window_size: u64,
 }
 
 impl VhostUserFsBackendBuilder {
@@ -415,6 +416,12 @@ impl VhostUserFsBackendBuilder {
         self
     }
 
+    /// Set the size of the DAX window in bytes. A value of `0` disables DAX.
+    pub fn set_dax_window_size(mut self, size: u64) -> Self {
+        self.dax_window_size = size;
+        self
+    }
+
     /// Build the [`VhostUserFsBackend`] object.
     pub fn build<F>(self, fs: F) -> Result<VhostUserFsBackend<F>>
     where
@@ -426,6 +433,7 @@ impl VhostUserFsBackendBuilder {
             premigration_thread: None.into(),
             migration_thread: None.into(),
             tag: self.tag,
+            dax_window_size: self.dax_window_size,
         })
     }
 }
@@ -435,6 +443,7 @@ pub struct VhostUserFsBackend<F: FileSystem + SerializableFileSystem + Send + Sy
     premigration_thread: Mutex<Option<PremigrationThread>>,
     migration_thread: Mutex<Option<JoinHandle<io::Result<()>>>>,
     tag: Option<String>,
+    dax_window_size: u64,
 }
 
 impl<F: FileSystem + SerializableFileSystem + Send + Sync + 'static> VhostUserFsBackend<F> {
@@ -483,7 +492,21 @@ impl<F: FileSystem + SerializableFileSystem + Send + Sync + 'static> VhostUserBa
             protocol_features |= VhostUserProtocolFeatures::CONFIG;
         }
 
+        if self.dax_window_size > 0 {
+            protocol_features |= VhostUserProtocolFeatures::SHMEM;
+        }
+
         protocol_features
+    }
+
+    fn get_shmem_config(&self) -> io::Result<VhostUserShMemConfig> {
+        if self.dax_window_size == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "DAX is not enabled",
+            ));
+        }
+        Ok(VhostUserShMemConfig::new(1, &[self.dax_window_size]))
     }
 
     fn get_config(&self, offset: u32, size: u32) -> Vec<u8> {
