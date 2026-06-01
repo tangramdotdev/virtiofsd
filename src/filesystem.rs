@@ -132,6 +132,15 @@ pub trait ZeroCopyReader {
         off: u64,
         flags: Option<oslib::WritevFlags>,
     ) -> io::Result<usize>;
+
+    /// Copies bytes from `self` directly into `buf`, returning the number of bytes copied. This is
+    /// a fallback to [`write_to_file_at`](Self::write_to_file_at) for `FileSystem` implementations
+    /// that have no backing `File` to write into (and thus no reasonable way to implement
+    /// `write_to_file_at`).
+    ///
+    /// Like `write_to_file_at`, this does not do short reads: it reads until `buf` is full or
+    /// `self` is exhausted, in which case the returned count may be less than `buf.len()`.
+    fn read_to_buf(&mut self, buf: &mut [u8]) -> io::Result<usize>;
 }
 
 impl<R: ZeroCopyReader> ZeroCopyReader for &mut R {
@@ -143,6 +152,10 @@ impl<R: ZeroCopyReader> ZeroCopyReader for &mut R {
         flags: Option<oslib::WritevFlags>,
     ) -> io::Result<usize> {
         (**self).write_to_file_at(f, count, off, flags)
+    }
+
+    fn read_to_buf(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        (**self).read_to_buf(buf)
     }
 }
 
@@ -168,6 +181,16 @@ pub trait ZeroCopyWriter {
         off: u64,
         flags: Option<oslib::ReadvFlags>,
     ) -> io::Result<usize>;
+
+    /// Copies bytes from `buf` directly into `self`, returning the number of bytes copied. This is
+    /// a fallback to [`read_from_file_at`](Self::read_from_file_at) for `FileSystem`
+    /// implementations that have no backing `File` to read from (and thus no reasonable way to
+    /// implement `read_from_file_at`).
+    ///
+    /// Like `read_from_file_at`, this does not do short writes: it writes until all of `buf` has
+    /// been written or `self` has no more space, in which case the returned count may be less than
+    /// `buf.len()`.
+    fn write_from_buf(&mut self, buf: &[u8]) -> io::Result<usize>;
 }
 
 impl<W: ZeroCopyWriter> ZeroCopyWriter for &mut W {
@@ -179,6 +202,10 @@ impl<W: ZeroCopyWriter> ZeroCopyWriter for &mut W {
         flags: Option<oslib::ReadvFlags>,
     ) -> io::Result<usize> {
         (**self).read_from_file_at(f, count, off, flags)
+    }
+
+    fn write_from_buf(&mut self, buf: &[u8]) -> io::Result<usize> {
+        (**self).write_from_buf(buf)
     }
 }
 

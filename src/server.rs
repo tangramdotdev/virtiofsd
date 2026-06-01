@@ -58,6 +58,18 @@ impl ZeroCopyReader for ZcReader<'_> {
         // Must fit: Cannot be greater than `count` originally
         Ok((off - start) as usize)
     }
+
+    fn read_to_buf(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut total = 0;
+        while total < buf.len() {
+            let read = self.0.read(&mut buf[total..])?;
+            if read == 0 {
+                break;
+            }
+            total += read;
+        }
+        Ok(total)
+    }
 }
 
 struct ZcWriter<'a>(Writer<'a>);
@@ -86,6 +98,18 @@ impl ZeroCopyWriter for ZcWriter<'_> {
 
         // Must fit: Cannot be greater than `count` originally
         Ok((off - start) as usize)
+    }
+
+    fn write_from_buf(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let mut total = 0;
+        while total < buf.len() {
+            let written = self.0.write(&buf[total..])?;
+            if written == 0 {
+                break;
+            }
+            total += written;
+        }
+        Ok(total)
     }
 }
 
