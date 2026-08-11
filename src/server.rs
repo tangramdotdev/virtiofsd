@@ -16,7 +16,7 @@ use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::mem::size_of;
-use std::os::fd::BorrowedFd;
+use std::os::fd::AsFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -234,8 +234,7 @@ impl<F: FileSystem + Sync> Server<F> {
                     len,
                     flags: mmap_flags.bits(),
                 };
-                let fd = unsafe { BorrowedFd::borrow_raw(fd) };
-                match vu_req.shmem_map(&request, &fd) {
+                match vu_req.shmem_map(&request, &fd.as_fd()) {
                     Ok(_) => reply_ok(None::<u8>, None, in_header.unique, w),
                     Err(e) => reply_error(e, in_header.unique, w),
                 }
