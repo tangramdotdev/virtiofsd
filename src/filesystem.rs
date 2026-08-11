@@ -4,7 +4,7 @@
 
 use std::ffi::{CStr, CString};
 use std::fs::File;
-use std::os::fd::RawFd;
+use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -1021,6 +1021,12 @@ pub trait FileSystem {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 
+    /// Establish a mapping for a DAX window.
+    ///
+    /// The returned descriptor is owned by the caller, which sends it to the VMM and then closes
+    /// it. Returning an owned descriptor lets an implementation duplicate it while it still holds
+    /// whatever lock guards the file, so that a concurrent release cannot close the descriptor
+    /// before the mapping is established.
     #[allow(clippy::too_many_arguments)]
     fn setupmapping(
         &self,
@@ -1030,7 +1036,7 @@ pub trait FileSystem {
         foffset: u64,
         len: u64,
         flags: SetupmappingFlags,
-    ) -> io::Result<(RawFd, u64)> {
+    ) -> io::Result<(OwnedFd, u64)> {
         Err(io::Error::from_raw_os_error(libc::ENOSYS))
     }
 }
