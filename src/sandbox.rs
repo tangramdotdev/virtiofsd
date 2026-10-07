@@ -262,6 +262,8 @@ impl Sandbox {
         if oldroot_fd < 0 {
             return Err(Error::OpenOldRoot(std::io::Error::last_os_error()));
         }
+        // SAFETY: `fd` is open and we have the exclusive ownership.
+        let oldroot_fd = unsafe { OwnedFd::from_raw_fd(oldroot_fd) };
 
         // Change to new root directory to prepare for `pivot_root` syscall.
         oslib::fchdir(newroot.as_raw_fd()).map_err(Error::ChdirNewRoot)?;
@@ -288,7 +290,7 @@ impl Sandbox {
             }
 
             // Change to old root directory to prepare for cleaning up and unmounting it.
-            oslib::fchdir(oldroot_fd).map_err(Error::ChdirOldRoot)?;
+            oslib::fchdir(oldroot_fd.as_raw_fd()).map_err(Error::ChdirOldRoot)?;
 
             // Clean up old root to avoid mount namespace propagation.
             oslib::mount(None, ".", None, libc::MS_SLAVE | libc::MS_REC)
@@ -302,7 +304,7 @@ impl Sandbox {
         }
 
         // We no longer need this file descriptor, so close it.
-        unsafe { libc::close(oldroot_fd) };
+        drop(oldroot_fd);
 
         // Open `/proc/self/mountinfo` now
         let c_mountinfo = CString::new("mountinfo").unwrap();
