@@ -1297,14 +1297,7 @@ impl PassthroughFs {
         let path_fd = self.open_relative_to(parent_file, name, libc::O_PATH, None)?;
 
         let procname = CString::new(format!("{}", path_fd.as_raw_fd()))
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e));
-
-        let procname = match procname {
-            Ok(name) => name,
-            Err(error) => {
-                return Err(error);
-            }
-        };
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let _working_dir_guard = self.switch_to_proc_self_fd();
 
