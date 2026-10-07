@@ -2,9 +2,11 @@
 
 use crate::soft_idmap::{HostGid, HostUid, Id};
 use bitflags::bitflags;
+use std::convert::TryFrom;
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::io::{self, Error, Result};
+use std::os::fd::OwnedFd;
 use std::os::unix::io::{AsRawFd, BorrowedFd, RawFd};
 use std::os::unix::prelude::FromRawFd;
 
@@ -195,15 +197,18 @@ pub fn openat(dir: &impl AsRawFd, pathname: &CStr, flags: i32, mode: Option<u32>
 ///
 /// Will return `Err(errno)` if `open_tree(2)` fails,
 /// see `open_tree(2)` for details.
-pub fn open_tree(dir: Option<&dyn AsRawFd>, pathname: &CStr, flags: u32) -> Result<RawFd> {
+pub fn open_tree(dir: Option<&dyn AsRawFd>, pathname: &CStr, flags: u32) -> Result<OwnedFd> {
     let fd = dir.map(AsRawFd::as_raw_fd).unwrap_or(libc::AT_FDCWD);
 
     // SAFETY: `libc::syscall` is called with the correct arity and types.
     // `pathname` points to a valid NUL-terminated string.
     // `fd` is guaranteed to be a valid file descriptor or AT_FDCWD.
-    check_retval(
-        unsafe { libc::syscall(libc::SYS_open_tree, fd, pathname.as_ptr(), flags) } as RawFd,
-    )
+    let fd =
+        check_retval(unsafe { libc::syscall(libc::SYS_open_tree, fd, pathname.as_ptr(), flags) })?;
+    let fd = i32::try_from(fd).expect("kernel fd fits in i32");
+
+    // SAFETY: `fd` is open and we have the exclusive ownership.
+    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
 }
 
 // libc does not define this on musl.
