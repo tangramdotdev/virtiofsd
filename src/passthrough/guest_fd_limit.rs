@@ -54,6 +54,7 @@ impl GuestFdSemaphore {
     ///
     /// The slot is released by dropping the returned `GuestFile`.
     pub fn allocate(self: &Arc<Self>, file: File) -> io::Result<GuestFile> {
+        #[allow(deprecated)] // TODO: replace with try_update() once MSRV >= 1.95
         self.available.fetch_update(
             Ordering::Relaxed,
             Ordering::Relaxed,
