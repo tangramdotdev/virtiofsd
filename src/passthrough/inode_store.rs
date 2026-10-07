@@ -548,6 +548,7 @@ impl StrongInodeReference {
     fn increment_refcount_for(inode_data: &InodeData) -> io::Result<()> {
         // Use `.fetch_update()` instead of `.fetch_add()` to ensure we never increment the
         // refcount from zero to one.
+        #[allow(deprecated)] // TODO: replace with try_update() once MSRV >= 1.95
         match inode_data
             .refcount
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |rc| {
