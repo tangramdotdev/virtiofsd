@@ -44,9 +44,41 @@ dropping capabilities and seccomp filters.
 Signed-off-by: Sergio Lopez <slp@redhat.com>
 ```
 
-## Pull requests
+## Commit integrity
 
-virtiofsd uses the “fork-and-merge” development model. Follow these steps if
+Every commit must leave the tree in a valid, working state. Each commit must:
+
+1. Compile successfully (`cargo build`)
+2. Pass tests (`cargo test`)
+3. Not break existing functionality
+
+This ensures tools like `git bisect` remain useful: a binary search across commit
+history only works when every intermediate commit is a buildable, functional state of
+the project.
+
+### Practical implications
+
+- Don't add a reference to a module in one commit and the module itself in the next
+- Don't split a refactor so one commit removes an interface while the next adds its
+  replacement
+- Code motion and semantic changes belong in separate commits, but each must stand
+  alone
+
+## Splitting changes
+
+Split your work into a series of logical, self-contained commits. Each commit
+should do one thing and do it completely:
+
+- A commit message containing "Also, ..." is a good sign the commit should be split
+- Keep **code motion** (moving code without changing it) in one commit and
+  **semantic changes** in another
+- Keep **formatting/style fixes** separate from functional changes
+- Don't include unrelated changes (whitespace fixes in code you're not otherwise
+  touching)
+
+## Merge requests
+
+virtiofsd uses the "fork-and-merge" development model. Follow these steps if
 you want to merge your changes to `virtiofsd`:
 
 1. Fork the [virtiofsd](https://gitlab.com/virtio-fs/virtiofsd) project
@@ -55,6 +87,13 @@ you want to merge your changes to `virtiofsd`:
 3. [Create a merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
    against the master branch of the virtiofsd repository.
 4. Once the merge request is approved, one of the maintainers will merge it.
+
+### No squash merges
+
+We do **not** use squash merges. Each commit in your merge request is preserved
+individually in the project history. This means every commit you submit matters.
+Write each one as a clean, self-contained change with a proper commit message and
+Signed-off-by, because that is exactly what will land in the repository.
 
 ## Issue tracking
 
