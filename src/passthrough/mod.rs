@@ -2658,6 +2658,19 @@ impl FileSystem for PassthroughFs {
         let data = self.find_handle(handle, inode)?;
 
         let fd = data.file.get()?.write().unwrap().as_fd().as_raw_fd();
+
+        // There is no kill-suidgid flag for this operation. The guest kernel
+        // cannot instruct us to strip privilege bits. Drop CAP_FSETID
+        // unconditionally so the host kernel does it. This removes the bits
+        // even when the file owner is the caller.
+        let _killpriv_guard = if self.cfg.killpriv_v2 {
+            drop_effective_cap("FSETID")?
+        } else {
+            None
+        };
+
+        self.clear_file_capabilities(fd, data.file_type, false)?;
+
         // Safe because this doesn't modify any memory and we check the return value.
         let res = unsafe {
             libc::fallocate64(
@@ -2716,6 +2729,18 @@ impl FileSystem for PassthroughFs {
 
         // Take just a read lock as we're not going to alter the file descriptor offset.
         let fd_out = data_out.file.get()?.read().unwrap().as_fd().as_raw_fd();
+
+        // There is no kill-suidgid flag for this operation. The guest kernel
+        // cannot instruct us to strip privilege bits. Drop CAP_FSETID
+        // unconditionally so the host kernel does it. This removes the bits
+        // even when the file owner is the caller.
+        let _killpriv_guard = if self.cfg.killpriv_v2 {
+            drop_effective_cap("FSETID")?
+        } else {
+            None
+        };
+
+        self.clear_file_capabilities(fd_out, data_out.file_type, false)?;
 
         // Safe because this will only modify `offset_in` and `offset_out` and we check
         // the return value.
