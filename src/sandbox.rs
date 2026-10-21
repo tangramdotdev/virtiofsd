@@ -238,8 +238,6 @@ impl Sandbox {
             &c_shared_dir,
             libc::AT_RECURSIVE as libc::c_uint | libc::OPEN_TREE_CLONE | libc::OPEN_TREE_CLOEXEC,
         )
-        // SAFETY: we just opened this fd.
-        .map(|fd| unsafe { File::from_raw_fd(fd) })
         .map_err(Error::OpenNewRoot)?;
 
         oslib::move_mount(
