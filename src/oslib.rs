@@ -176,19 +176,27 @@ impl Drop for ScopedUmask {
 ///
 /// Will return `Err(errno)` if `openat(2)` fails,
 /// see `openat(2)` for details.
-pub fn openat(dir: &impl AsRawFd, pathname: &CStr, flags: i32, mode: Option<u32>) -> Result<RawFd> {
+pub fn openat(
+    dir: &impl AsRawFd,
+    pathname: &CStr,
+    flags: i32,
+    mode: Option<u32>,
+) -> Result<OwnedFd> {
     let mode = u64::from(mode.unwrap_or(0));
 
     // SAFETY: `pathname` points to a valid NUL-terminated string.
     // However, the caller must ensure that `dir` can provide a valid file descriptor.
-    check_retval(unsafe {
+    let fd = check_retval(unsafe {
         libc::openat(
             dir.as_raw_fd(),
             pathname.as_ptr(),
             flags as libc::c_int,
             mode,
         )
-    })
+    })?;
+
+    // SAFETY: `fd` is open and we have the exclusive ownership.
+    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
 }
 
 /// Safe wrapper around `open_tree(2)`.
@@ -270,7 +278,7 @@ pub fn do_open_relative_to(
     pathname: &CStr,
     flags: i32,
     mode: Option<u32>,
-) -> Result<RawFd> {
+) -> Result<OwnedFd> {
     // `openat2(2)` returns an error if `how.mode` contains bits other than those in range 07777,
     // let's ignore the extra bits to be compatible with `openat(2)`.
     let mode = u64::from(mode.unwrap_or(0)) & 0o7777;
@@ -284,7 +292,7 @@ pub fn do_open_relative_to(
     // SAFETY: `pathname` points to a valid NUL-terminated string, and the `how` pointer is a valid
     // pointer to an `open_how` struct. However, the caller must ensure that `dir` can provide a
     // valid file descriptor (this can be changed to BorrowedFd).
-    check_retval(unsafe {
+    let fd = check_retval(unsafe {
         libc::syscall(
             libc::SYS_openat2,
             dir.as_raw_fd(),
@@ -292,7 +300,12 @@ pub fn do_open_relative_to(
             std::ptr::addr_of!(how),
             std::mem::size_of::<libc::open_how>(),
         )
-    } as RawFd)
+    })?;
+
+    let fd = i32::try_from(fd).expect("kernel fd fits in i32");
+
+    // SAFETY: `fd` is open and we have the exclusive ownership.
+    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
 }
 
 mod filehandle {

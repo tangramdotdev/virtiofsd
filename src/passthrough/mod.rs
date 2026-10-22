@@ -43,7 +43,8 @@ use std::fs::File;
 use std::io;
 use std::io::ErrorKind;
 use std::mem::MaybeUninit;
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::fd::OwnedFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -652,7 +653,7 @@ impl PassthroughFs {
         pathname: &CStr,
         flags: i32,
         mode: Option<u32>,
-    ) -> io::Result<RawFd> {
+    ) -> io::Result<OwnedFd> {
         let flags = libc::O_NOFOLLOW | libc::O_CLOEXEC | flags;
 
         if self.os_facts.has_openat2 {
@@ -874,11 +875,7 @@ impl PassthroughFs {
     )> {
         let p_file = parent_data.get_file()?;
 
-        let path_fd = {
-            let fd = self.open_relative_to(&p_file, name, libc::O_PATH, None)?;
-            // Safe because we just opened this fd.
-            unsafe { File::from_raw_fd(fd) }
-        };
+        let path_fd = self.open_relative_to(&p_file, name, libc::O_PATH, None)?;
 
         let st = statx(&path_fd, None)?;
 
@@ -895,7 +892,7 @@ impl PassthroughFs {
 
         Ok((
             self.inodes.claim_inode(handle.as_ref(), &ids).ok(),
-            path_fd,
+            path_fd.into(),
             st,
             handle,
         ))
@@ -1230,7 +1227,7 @@ impl PassthroughFs {
         flags: u32,
         umask: u32,
         extensions: Extensions,
-    ) -> io::Result<RawFd> {
+    ) -> io::Result<OwnedFd> {
         let fd = {
             let _credentials_guard = self.unix_credentials_guard(ctx, &extensions)?;
             let _umask_guard = self
@@ -1263,7 +1260,7 @@ impl PassthroughFs {
 
             let ret = unsafe {
                 libc::fsetxattr(
-                    fd,
+                    fd.as_raw_fd(),
                     xattr_name.as_ptr(),
                     secctx.secctx.as_ptr() as *const libc::c_void,
                     secctx.secctx.len(),
@@ -1299,15 +1296,8 @@ impl PassthroughFs {
         // Open O_PATH fd for dir/symlink/special node just created.
         let path_fd = self.open_relative_to(parent_file, name, libc::O_PATH, None)?;
 
-        let procname = CString::new(format!("{path_fd}"))
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e));
-
-        let procname = match procname {
-            Ok(name) => name,
-            Err(error) => {
-                return Err(error);
-            }
-        };
+        let procname = CString::new(format!("{}", path_fd.as_raw_fd()))
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let _working_dir_guard = self.switch_to_proc_self_fd();
 
@@ -1852,15 +1842,12 @@ impl FileSystem for PassthroughFs {
                 (entry, handle)
             }
             Ok(fd) => {
-                // Safe because we just opened this fd.
-                let file = unsafe { File::from_raw_fd(fd) };
-
                 let entry = self.do_lookup(parent, name)?;
 
                 let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);
                 let data = HandleData {
                     inode: entry.inode,
-                    file: self.guest_fds.allocate(file)?.into(),
+                    file: self.guest_fds.allocate(fd.into())?.into(),
                     file_type: FileType::from_mode(mode),
                     migration_info: HandleMigrationInfo::new(flags as i32),
                 };

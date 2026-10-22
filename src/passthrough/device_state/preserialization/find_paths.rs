@@ -14,9 +14,8 @@ use crate::util::{other_io_error, ResultErrorContext};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::{CStr, CString};
 use std::fmt::{self, Display};
-use std::fs::File;
 use std::io;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -232,12 +231,9 @@ impl<'a> Constructor<'a> {
             return Ok(None);
         }
 
-        let path_fd = {
-            let fd = self
-                .fs
-                .open_relative_to(parent_fd, name, libc::O_PATH, None)?;
-            unsafe { File::from_raw_fd(fd) }
-        };
+        let path_fd = self
+            .fs
+            .open_relative_to(parent_fd, name, libc::O_PATH, None)?;
         let stat = statx(&path_fd, None)?;
         let handle = self.fs.get_file_handle_opt(&path_fd, &stat)?;
 
@@ -286,7 +282,7 @@ impl<'a> Constructor<'a> {
         let file_or_handle = if let Some(h) = handle.as_ref() {
             FileOrHandle::Handle(self.fs.make_file_handle_openable(h)?)
         } else {
-            FileOrHandle::File(self.fs.guest_fds.allocate(path_fd)?)
+            FileOrHandle::File(self.fs.guest_fds.allocate(path_fd.into())?)
         };
 
         let mig_info = InodeMigrationInfo::new_internal(
