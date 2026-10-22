@@ -111,8 +111,8 @@ pub fn umount2(target: &str, flags: i32) -> Result<()> {
 ///
 /// Will return `Err(errno)` if `fchdir(2)` fails.
 /// Each filesystem type may have its own special errors, see `fchdir(2)` for details.
-pub fn fchdir(fd: RawFd) -> Result<()> {
-    check_retval(unsafe { libc::fchdir(fd) })?;
+pub fn fchdir(fd: impl AsFd) -> Result<()> {
+    check_retval(unsafe { libc::fchdir(fd.as_fd().as_raw_fd()) })?;
     Ok(())
 }
 

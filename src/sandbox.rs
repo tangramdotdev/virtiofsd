@@ -264,7 +264,7 @@ impl Sandbox {
         let oldroot_fd = unsafe { OwnedFd::from_raw_fd(oldroot_fd) };
 
         // Change to new root directory to prepare for `pivot_root` syscall.
-        oslib::fchdir(newroot.as_raw_fd()).map_err(Error::ChdirNewRoot)?;
+        oslib::fchdir(&newroot).map_err(Error::ChdirNewRoot)?;
 
         // Check if we are supposed to switch to our current rootfs
         let old_st = passthrough::statx(&oldroot_fd, None).map_err(Error::StatOldRoot)?;
@@ -288,7 +288,7 @@ impl Sandbox {
             }
 
             // Change to old root directory to prepare for cleaning up and unmounting it.
-            oslib::fchdir(oldroot_fd.as_raw_fd()).map_err(Error::ChdirOldRoot)?;
+            oslib::fchdir(&oldroot_fd).map_err(Error::ChdirOldRoot)?;
 
             // Clean up old root to avoid mount namespace propagation.
             oslib::mount(None, ".", None, libc::MS_SLAVE | libc::MS_REC)
@@ -298,7 +298,7 @@ impl Sandbox {
             oslib::umount2(".", libc::MNT_DETACH).map_err(Error::UmountOldRoot)?;
 
             // Change to new root.
-            oslib::fchdir(newroot.as_raw_fd()).map_err(Error::ChdirNewRoot)?;
+            oslib::fchdir(&newroot).map_err(Error::ChdirNewRoot)?;
         }
 
         // We no longer need this file descriptor, so close it.
