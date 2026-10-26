@@ -230,14 +230,18 @@ pub const MOVE_MOUNT_F_EMPTY_PATH: libc::c_uint = 0x00000004;
 /// Will return `Err(errno)` if `move_mount(2)` fails,
 /// see `move_mount(2)` for details.
 pub fn move_mount(
-    from_dir: Option<&dyn AsRawFd>,
+    from_dir: Option<&dyn AsFd>,
     from_path: &CStr,
-    to_dir: Option<&dyn AsRawFd>,
+    to_dir: Option<&dyn AsFd>,
     to_path: &CStr,
     flags: u32,
 ) -> Result<()> {
-    let from_fd = from_dir.map(AsRawFd::as_raw_fd).unwrap_or(libc::AT_FDCWD);
-    let to_fd = to_dir.map(AsRawFd::as_raw_fd).unwrap_or(libc::AT_FDCWD);
+    let from_fd = from_dir
+        .map(|f| f.as_fd().as_raw_fd())
+        .unwrap_or(libc::AT_FDCWD);
+    let to_fd = to_dir
+        .map(|f| f.as_fd().as_raw_fd())
+        .unwrap_or(libc::AT_FDCWD);
 
     // SAFETY: `libc::syscall` is called with the correct arity and types.
     // `from_path` and `to_path` point to valid NUL-terminated strings.
