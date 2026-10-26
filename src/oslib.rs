@@ -421,14 +421,14 @@ pub fn name_to_handle_at(
 }
 
 pub fn open_by_handle_at(
-    mount_fd: &impl AsRawFd,
+    mount_fd: impl AsFd,
     file_handle: &CFileHandle,
     flags: libc::c_int,
 ) -> Result<File> {
     // SAFETY: `mount_fd` is a valid file descriptor and `file_handle`
     // is a valid reference to `CFileHandle`
     let fd = check_retval(unsafe {
-        filehandle::open_by_handle_at(mount_fd.as_raw_fd(), file_handle, flags)
+        filehandle::open_by_handle_at(mount_fd.as_fd().as_raw_fd(), file_handle, flags)
     })?;
 
     // SAFETY: `open_by_handle_at()` guarantees `fd` is a valid file descriptor
