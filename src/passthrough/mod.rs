@@ -43,7 +43,7 @@ use std::fs::File;
 use std::io;
 use std::io::ErrorKind;
 use std::mem::MaybeUninit;
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -1196,19 +1196,19 @@ impl PassthroughFs {
 
     /// Clears S_ISGID from file mode
     ///
-    /// * `file` - file reference (must implement AsRawFd)
-    /// * `o_path` - Must be `true` if the file referred to by `fd` was opened with the `O_PATH` flag
+    /// * `file` - file (must implement AsFd)
+    /// * `o_path` - Must be `true` if `file` was opened with the `O_PATH` flag
     ///
-    /// If it is not clear whether `fd` was opened with `O_PATH` it is safe to set `o_path`
+    /// If it is not clear whether `file` was opened with `O_PATH` it is safe to set `o_path`
     /// to `true`.
-    fn clear_sgid(&self, file: &impl AsRawFd, o_path: bool) -> io::Result<()> {
-        let fd = file.as_raw_fd();
-        let st = statx(file, None)?.st;
+    fn clear_sgid(&self, file: impl AsFd, o_path: bool) -> io::Result<()> {
+        let fd = file.as_fd();
+        let st = statx(&fd, None)?.st;
 
         if o_path {
             oslib::fchmodat(
-                self.proc_self_fd.as_raw_fd(),
-                format!("{fd}"),
+                &self.proc_self_fd,
+                format!("{}", fd.as_raw_fd()),
                 st.st_mode & 0o7777 & !libc::S_ISGID,
                 0,
             )

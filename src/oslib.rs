@@ -6,7 +6,7 @@ use std::convert::TryFrom;
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::io::{self, Error, Result};
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::io::{AsRawFd, BorrowedFd, RawFd};
 use std::os::unix::prelude::FromRawFd;
 
@@ -122,8 +122,8 @@ pub fn fchdir(fd: RawFd) -> Result<()> {
 ///
 /// Will return `Err(errno)` if `fchmod(2)` fails.
 /// Each filesystem type may have its own special errors, see `fchmod(2)` for details.
-pub fn fchmod(fd: RawFd, mode: libc::mode_t) -> Result<()> {
-    check_retval(unsafe { libc::fchmod(fd, mode) })?;
+pub fn fchmod(fd: impl AsFd, mode: libc::mode_t) -> Result<()> {
+    check_retval(unsafe { libc::fchmod(fd.as_fd().as_raw_fd(), mode) })?;
     Ok(())
 }
 
@@ -133,12 +133,12 @@ pub fn fchmod(fd: RawFd, mode: libc::mode_t) -> Result<()> {
 ///
 /// Will return `Err(errno)` if `fchmodat(2)` fails.
 /// Each filesystem type may have its own special errors, see `fchmodat(2)` for details.
-pub fn fchmodat(dirfd: RawFd, pathname: String, mode: libc::mode_t, flags: i32) -> Result<()> {
+pub fn fchmodat(dirfd: impl AsFd, pathname: String, mode: libc::mode_t, flags: i32) -> Result<()> {
     let pathname =
         CString::new(pathname).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let pathname = pathname.as_ptr();
 
-    check_retval(unsafe { libc::fchmodat(dirfd, pathname, mode, flags) })?;
+    check_retval(unsafe { libc::fchmodat(dirfd.as_fd().as_raw_fd(), pathname, mode, flags) })?;
     Ok(())
 }
 
