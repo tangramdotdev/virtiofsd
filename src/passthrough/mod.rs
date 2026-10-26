@@ -1082,7 +1082,7 @@ impl PassthroughFs {
 
         let invalidated_inode = self.before_invalidating_path(&data, name);
         // Safe because this doesn't modify any memory and we check the return value.
-        let res = unsafe { libc::unlinkat(parent_file.as_raw_fd(), name.as_ptr(), flags) };
+        let res = unsafe { libc::unlinkat(parent_file.as_fd().as_raw_fd(), name.as_ptr(), flags) };
         if let Some(invalidated_inode) = invalidated_inode {
             self.after_invalidating_path(invalidated_inode, "Unlinked");
         }
@@ -1253,7 +1253,7 @@ impl PassthroughFs {
                 Ok(xattr_name) => xattr_name,
                 Err(e) => {
                     unsafe {
-                        libc::unlinkat(parent_file.as_raw_fd(), name.as_ptr(), 0);
+                        libc::unlinkat(parent_file.as_fd().as_raw_fd(), name.as_ptr(), 0);
                     }
                     return Err(e);
                 }
@@ -1271,7 +1271,7 @@ impl PassthroughFs {
 
             if ret != 0 {
                 unsafe {
-                    libc::unlinkat(parent_file.as_raw_fd(), name.as_ptr(), 0);
+                    libc::unlinkat(parent_file.as_fd().as_raw_fd(), name.as_ptr(), 0);
                 }
                 return Err(io::Error::last_os_error());
             }
@@ -1662,7 +1662,7 @@ impl FileSystem for PassthroughFs {
         let mut out = MaybeUninit::<libc::statvfs64>::zeroed();
 
         // Safe because this will only modify `out` and we check the return value.
-        let res = unsafe { libc::fstatvfs64(inode_file.as_raw_fd(), out.as_mut_ptr()) };
+        let res = unsafe { libc::fstatvfs64(inode_file.as_fd().as_raw_fd(), out.as_mut_ptr()) };
         if res == 0 {
             // Safe because the kernel guarantees that `out` has been initialized.
             Ok(unsafe { out.assume_init() })
@@ -1723,7 +1723,7 @@ impl FileSystem for PassthroughFs {
                 .then(|| oslib::ScopedUmask::new(umask));
 
             // Safe because this doesn't modify any memory and we check the return value.
-            unsafe { libc::mkdirat(parent_file.as_raw_fd(), name.as_ptr(), mode) }
+            unsafe { libc::mkdirat(parent_file.as_fd().as_raw_fd(), name.as_ptr(), mode) }
         };
         if let Some(invalidated_inode) = invalidated_inode {
             self.after_invalidating_path(invalidated_inode, "Overwrote (via mkdir)");
@@ -1736,7 +1736,11 @@ impl FileSystem for PassthroughFs {
         if let Some(secctx) = extensions.secctx {
             if let Err(e) = self.do_mknod_mkdir_symlink_secctx(&parent_file, name, &secctx) {
                 unsafe {
-                    libc::unlinkat(parent_file.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR);
+                    libc::unlinkat(
+                        parent_file.as_fd().as_raw_fd(),
+                        name.as_ptr(),
+                        libc::AT_REMOVEDIR,
+                    );
                 };
                 return Err(e);
             }
@@ -1978,7 +1982,7 @@ impl FileSystem for PassthroughFs {
             let fd = hd.file.get()?.write().unwrap().as_raw_fd();
             Data::Handle(hd, fd)
         } else {
-            let pathname = CString::new(format!("{}", inode_file.as_raw_fd()))
+            let pathname = CString::new(format!("{}", inode_file.as_fd().as_raw_fd()))
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             Data::ProcPath(pathname)
         };
@@ -2012,7 +2016,7 @@ impl FileSystem for PassthroughFs {
                 u32::MAX
             };
 
-            self.clear_file_capabilities(inode_file.as_raw_fd(), file_type, true)?;
+            self.clear_file_capabilities(inode_file.as_fd().as_raw_fd(), file_type, true)?;
 
             // Safe because this is a constant value and a valid C string.
             let empty = unsafe { CStr::from_bytes_with_nul_unchecked(EMPTY_CSTR) };
@@ -2020,7 +2024,7 @@ impl FileSystem for PassthroughFs {
             // Safe because this doesn't modify any memory and we check the return value.
             let res = unsafe {
                 libc::fchownat(
-                    inode_file.as_raw_fd(),
+                    inode_file.as_fd().as_raw_fd(),
                     empty.as_ptr(),
                     uid,
                     gid,
@@ -2038,7 +2042,7 @@ impl FileSystem for PassthroughFs {
                 _ => {
                     // Should have opened an O_RDWR inode_file above
                     assert!(rdwr_inode_file);
-                    inode_file.as_raw_fd()
+                    inode_file.as_fd().as_raw_fd()
                 }
             };
 
@@ -2121,9 +2125,9 @@ impl FileSystem for PassthroughFs {
         let res = unsafe {
             libc::syscall(
                 libc::SYS_renameat2,
-                old_file.as_raw_fd(),
+                old_file.as_fd().as_raw_fd(),
                 oldname.as_ptr(),
-                new_file.as_raw_fd(),
+                new_file.as_fd().as_raw_fd(),
                 newname.as_ptr(),
                 flags,
             )
@@ -2169,7 +2173,7 @@ impl FileSystem for PassthroughFs {
             // Safe because this doesn't modify any memory and we check the return value.
             unsafe {
                 libc::mknodat(
-                    parent_file.as_raw_fd(),
+                    parent_file.as_fd().as_raw_fd(),
                     name.as_ptr(),
                     mode as libc::mode_t,
                     u64::from(rdev),
@@ -2188,7 +2192,7 @@ impl FileSystem for PassthroughFs {
         if let Some(secctx) = extensions.secctx {
             if let Err(e) = self.do_mknod_mkdir_symlink_secctx(&parent_file, name, &secctx) {
                 unsafe {
-                    libc::unlinkat(parent_file.as_raw_fd(), name.as_ptr(), 0);
+                    libc::unlinkat(parent_file.as_fd().as_raw_fd(), name.as_ptr(), 0);
                 };
                 return Err(e);
             }
@@ -2209,7 +2213,7 @@ impl FileSystem for PassthroughFs {
         let inode_file = data.get_file()?;
         let newparent_file = new_inode.get_file()?;
 
-        let procname = CString::new(format!("{}", inode_file.as_raw_fd()))
+        let procname = CString::new(format!("{}", inode_file.as_fd().as_raw_fd()))
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let invalidated_inode = self.before_invalidating_path(&new_inode, newname);
@@ -2218,7 +2222,7 @@ impl FileSystem for PassthroughFs {
             libc::linkat(
                 self.proc_self_fd.as_raw_fd(),
                 procname.as_ptr(),
-                newparent_file.as_raw_fd(),
+                newparent_file.as_fd().as_raw_fd(),
                 newname.as_ptr(),
                 libc::AT_SYMLINK_FOLLOW,
             )
@@ -2249,7 +2253,13 @@ impl FileSystem for PassthroughFs {
             let _credentials_guard = self.unix_credentials_guard(&ctx, &extensions)?;
 
             // Safe because this doesn't modify any memory and we check the return value.
-            unsafe { libc::symlinkat(linkname.as_ptr(), parent_file.as_raw_fd(), name.as_ptr()) }
+            unsafe {
+                libc::symlinkat(
+                    linkname.as_ptr(),
+                    parent_file.as_fd().as_raw_fd(),
+                    name.as_ptr(),
+                )
+            }
         };
         if let Some(invalidated_inode) = invalidated_inode {
             self.after_invalidating_path(invalidated_inode, "Overwrote (via symlink)");
@@ -2263,7 +2273,7 @@ impl FileSystem for PassthroughFs {
         if let Some(secctx) = extensions.secctx {
             if let Err(e) = self.do_mknod_mkdir_symlink_secctx(&parent_file, name, &secctx) {
                 unsafe {
-                    libc::unlinkat(parent_file.as_raw_fd(), name.as_ptr(), 0);
+                    libc::unlinkat(parent_file.as_fd().as_raw_fd(), name.as_ptr(), 0);
                 };
                 return Err(e);
             }
@@ -2284,7 +2294,7 @@ impl FileSystem for PassthroughFs {
         // Safe because this will only modify the contents of `buf` and we check the return value.
         let res = unsafe {
             libc::readlinkat(
-                inode_file.as_raw_fd(),
+                inode_file.as_fd().as_raw_fd(),
                 empty.as_ptr(),
                 buf.as_mut_ptr() as *mut libc::c_char,
                 buf.len(),
@@ -2459,13 +2469,13 @@ impl FileSystem for PassthroughFs {
 
             // No-op for non-regular files (is_safe_inode is true only for regular files and
             // directories). Kept for consistency.
-            self.clear_file_capabilities(file.as_raw_fd(), file_type, true)?;
+            self.clear_file_capabilities(file.as_fd().as_raw_fd(), file_type, true)?;
 
             if must_clear_sgid {
                 self.clear_sgid(&file, true)?;
             }
 
-            let procname = CString::new(format!("{}", file.as_raw_fd()))
+            let procname = CString::new(format!("{}", file.as_fd().as_raw_fd()))
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
             let _working_dir_guard = self.switch_to_proc_self_fd();
@@ -2528,7 +2538,7 @@ impl FileSystem for PassthroughFs {
         } else {
             let file = data.get_file()?;
 
-            let procname = CString::new(format!("{}", file.as_raw_fd()))
+            let procname = CString::new(format!("{}", file.as_fd().as_raw_fd()))
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
             let _working_dir_guard = self.switch_to_proc_self_fd();
@@ -2579,7 +2589,7 @@ impl FileSystem for PassthroughFs {
         } else {
             let file = data.get_file()?;
 
-            let procname = CString::new(format!("{}", file.as_raw_fd()))
+            let procname = CString::new(format!("{}", file.as_fd().as_raw_fd()))
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
             let _working_dir_guard = self.switch_to_proc_self_fd();
@@ -2624,7 +2634,7 @@ impl FileSystem for PassthroughFs {
         } else {
             let file = data.get_file()?;
 
-            let procname = CString::new(format!("{}", file.as_raw_fd()))
+            let procname = CString::new(format!("{}", file.as_fd().as_raw_fd()))
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
             let _working_dir_guard = self.switch_to_proc_self_fd();
