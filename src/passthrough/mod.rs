@@ -649,17 +649,18 @@ impl PassthroughFs {
 
     fn open_relative_to(
         &self,
-        dir: &impl AsRawFd,
+        dir: impl AsFd,
         pathname: &CStr,
         flags: i32,
         mode: Option<u32>,
     ) -> io::Result<OwnedFd> {
+        let dir = dir.as_fd();
         let flags = libc::O_NOFOLLOW | libc::O_CLOEXEC | flags;
 
         if self.os_facts.has_openat2 {
-            oslib::do_open_relative_to(dir, pathname, flags, mode)
+            oslib::do_open_relative_to(&dir, pathname, flags, mode)
         } else {
-            oslib::openat(dir, pathname, flags, mode)
+            oslib::openat(&dir, pathname, flags, mode)
         }
     }
 
