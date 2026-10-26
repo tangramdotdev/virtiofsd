@@ -205,8 +205,8 @@ pub fn openat(
 ///
 /// Will return `Err(errno)` if `open_tree(2)` fails,
 /// see `open_tree(2)` for details.
-pub fn open_tree(dir: Option<&dyn AsRawFd>, pathname: &CStr, flags: u32) -> Result<OwnedFd> {
-    let fd = dir.map(AsRawFd::as_raw_fd).unwrap_or(libc::AT_FDCWD);
+pub fn open_tree(dir: Option<&dyn AsFd>, pathname: &CStr, flags: u32) -> Result<OwnedFd> {
+    let fd = dir.map(|f| f.as_fd().as_raw_fd()).unwrap_or(libc::AT_FDCWD);
 
     // SAFETY: `libc::syscall` is called with the correct arity and types.
     // `pathname` points to a valid NUL-terminated string.
