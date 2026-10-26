@@ -1203,7 +1203,7 @@ impl PassthroughFs {
     /// to `true`.
     fn clear_sgid(&self, file: impl AsFd, o_path: bool) -> io::Result<()> {
         let fd = file.as_fd();
-        let st = statx(&fd, None)?.st;
+        let st = statx(fd, None)?.st;
 
         if o_path {
             oslib::fchmodat(

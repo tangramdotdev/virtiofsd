@@ -5,6 +5,7 @@
 use std::ffi::CStr;
 use std::io;
 use std::mem::MaybeUninit;
+use std::os::fd::AsFd;
 use std::os::unix::io::AsRawFd;
 
 mod file_status;
@@ -83,13 +84,19 @@ impl SafeStatXAccess for statx_st {
     }
 }
 
-fn get_mount_id(dir: &impl AsRawFd, path: &CStr) -> Option<MountId> {
+fn get_mount_id(dir: impl AsFd, path: &CStr) -> Option<MountId> {
     let mut mount_id: libc::c_int = 0;
     let mut c_fh = oslib::CFileHandle::default();
 
-    oslib::name_to_handle_at(dir, path, &mut c_fh, &mut mount_id, libc::AT_EMPTY_PATH)
-        .ok()
-        .and(Some(mount_id as MountId))
+    oslib::name_to_handle_at(
+        &dir.as_fd(),
+        path,
+        &mut c_fh,
+        &mut mount_id,
+        libc::AT_EMPTY_PATH,
+    )
+    .ok()
+    .and(Some(mount_id as MountId))
 }
 
 // Only works on Linux, and libc::SYS_statx is only defined for these
@@ -110,7 +117,7 @@ unsafe fn do_statx(
 }
 
 // Real statx() that depends on do_statx()
-pub fn statx(dir: &impl AsRawFd, path: Option<&CStr>) -> io::Result<StatExt> {
+pub fn statx(dir: impl AsFd, path: Option<&CStr>) -> io::Result<StatExt> {
     let mut stx_ui = MaybeUninit::<statx_st>::zeroed();
 
     // Safe because this is a constant value and a valid C string.
@@ -120,7 +127,7 @@ pub fn statx(dir: &impl AsRawFd, path: Option<&CStr>) -> io::Result<StatExt> {
     // check the return value.
     let res = unsafe {
         do_statx(
-            dir.as_raw_fd(),
+            dir.as_fd().as_raw_fd(),
             path.as_ptr(),
             libc::AT_EMPTY_PATH | libc::AT_SYMLINK_NOFOLLOW,
             STATX_BASIC_STATS | STATX_MNT_ID,
