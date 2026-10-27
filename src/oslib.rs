@@ -111,8 +111,8 @@ pub fn umount2(target: &str, flags: i32) -> Result<()> {
 ///
 /// Will return `Err(errno)` if `fchdir(2)` fails.
 /// Each filesystem type may have its own special errors, see `fchdir(2)` for details.
-pub fn fchdir(fd: RawFd) -> Result<()> {
-    check_retval(unsafe { libc::fchdir(fd) })?;
+pub fn fchdir(fd: impl AsFd) -> Result<()> {
+    check_retval(unsafe { libc::fchdir(fd.as_fd().as_raw_fd()) })?;
     Ok(())
 }
 
@@ -205,8 +205,8 @@ pub fn openat(
 ///
 /// Will return `Err(errno)` if `open_tree(2)` fails,
 /// see `open_tree(2)` for details.
-pub fn open_tree(dir: Option<&dyn AsRawFd>, pathname: &CStr, flags: u32) -> Result<OwnedFd> {
-    let fd = dir.map(AsRawFd::as_raw_fd).unwrap_or(libc::AT_FDCWD);
+pub fn open_tree(dir: Option<&dyn AsFd>, pathname: &CStr, flags: u32) -> Result<OwnedFd> {
+    let fd = dir.map(|f| f.as_fd().as_raw_fd()).unwrap_or(libc::AT_FDCWD);
 
     // SAFETY: `libc::syscall` is called with the correct arity and types.
     // `pathname` points to a valid NUL-terminated string.
@@ -230,14 +230,18 @@ pub const MOVE_MOUNT_F_EMPTY_PATH: libc::c_uint = 0x00000004;
 /// Will return `Err(errno)` if `move_mount(2)` fails,
 /// see `move_mount(2)` for details.
 pub fn move_mount(
-    from_dir: Option<&dyn AsRawFd>,
+    from_dir: Option<&dyn AsFd>,
     from_path: &CStr,
-    to_dir: Option<&dyn AsRawFd>,
+    to_dir: Option<&dyn AsFd>,
     to_path: &CStr,
     flags: u32,
 ) -> Result<()> {
-    let from_fd = from_dir.map(AsRawFd::as_raw_fd).unwrap_or(libc::AT_FDCWD);
-    let to_fd = to_dir.map(AsRawFd::as_raw_fd).unwrap_or(libc::AT_FDCWD);
+    let from_fd = from_dir
+        .map(|f| f.as_fd().as_raw_fd())
+        .unwrap_or(libc::AT_FDCWD);
+    let to_fd = to_dir
+        .map(|f| f.as_fd().as_raw_fd())
+        .unwrap_or(libc::AT_FDCWD);
 
     // SAFETY: `libc::syscall` is called with the correct arity and types.
     // `from_path` and `to_path` point to valid NUL-terminated strings.
@@ -417,14 +421,14 @@ pub fn name_to_handle_at(
 }
 
 pub fn open_by_handle_at(
-    mount_fd: &impl AsRawFd,
+    mount_fd: impl AsFd,
     file_handle: &CFileHandle,
     flags: libc::c_int,
 ) -> Result<File> {
     // SAFETY: `mount_fd` is a valid file descriptor and `file_handle`
     // is a valid reference to `CFileHandle`
     let fd = check_retval(unsafe {
-        filehandle::open_by_handle_at(mount_fd.as_raw_fd(), file_handle, flags)
+        filehandle::open_by_handle_at(mount_fd.as_fd().as_raw_fd(), file_handle, flags)
     })?;
 
     // SAFETY: `open_by_handle_at()` guarantees `fd` is a valid file descriptor

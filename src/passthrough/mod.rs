@@ -43,7 +43,7 @@ use std::fs::File;
 use std::io;
 use std::io::ErrorKind;
 use std::mem::MaybeUninit;
-use std::os::fd::{AsFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -97,18 +97,18 @@ struct HandleData {
     migration_info: HandleMigrationInfo,
 }
 
-struct ScopedWorkingDirectory {
-    back_to: RawFd,
+struct ScopedWorkingDirectory<'a> {
+    back_to: BorrowedFd<'a>,
 }
 
-impl ScopedWorkingDirectory {
-    fn new(new_wd: RawFd, old_wd: RawFd) -> ScopedWorkingDirectory {
+impl<'a> ScopedWorkingDirectory<'a> {
+    fn new(new_wd: impl AsFd, old_wd: BorrowedFd<'a>) -> Self {
         oslib::fchdir(new_wd).expect("the working directory should be changed");
         ScopedWorkingDirectory { back_to: old_wd }
     }
 }
 
-impl Drop for ScopedWorkingDirectory {
+impl Drop for ScopedWorkingDirectory<'_> {
     fn drop(&mut self) {
         oslib::fchdir(self.back_to).expect("the working directory should be changed");
     }
@@ -639,8 +639,8 @@ impl PassthroughFs {
         Ok(fs)
     }
 
-    fn switch_to_proc_self_fd(&self) -> ScopedWorkingDirectory {
-        ScopedWorkingDirectory::new(self.proc_self_fd.as_raw_fd(), self.orig_wd_fd.as_raw_fd())
+    fn switch_to_proc_self_fd(&self) -> ScopedWorkingDirectory<'_> {
+        ScopedWorkingDirectory::new(&self.proc_self_fd, self.orig_wd_fd.as_fd())
     }
 
     pub fn keep_fds(&self) -> Vec<RawFd> {
