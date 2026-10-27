@@ -88,15 +88,9 @@ fn get_mount_id(dir: impl AsFd, path: &CStr) -> Option<MountId> {
     let mut mount_id: libc::c_int = 0;
     let mut c_fh = oslib::CFileHandle::default();
 
-    oslib::name_to_handle_at(
-        &dir.as_fd(),
-        path,
-        &mut c_fh,
-        &mut mount_id,
-        libc::AT_EMPTY_PATH,
-    )
-    .ok()
-    .and(Some(mount_id as MountId))
+    oslib::name_to_handle_at(dir, path, &mut c_fh, &mut mount_id, libc::AT_EMPTY_PATH)
+        .ok()
+        .and(Some(mount_id as MountId))
 }
 
 // Only works on Linux, and libc::SYS_statx is only defined for these

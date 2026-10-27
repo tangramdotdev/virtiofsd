@@ -50,13 +50,7 @@ impl FileHandle {
         let mut mount_id: libc::c_int = 0;
         let mut c_fh = oslib::CFileHandle::default();
 
-        oslib::name_to_handle_at(
-            &dir.as_fd(),
-            path,
-            &mut c_fh,
-            &mut mount_id,
-            libc::AT_EMPTY_PATH,
-        )?;
+        oslib::name_to_handle_at(dir, path, &mut c_fh, &mut mount_id, libc::AT_EMPTY_PATH)?;
         Ok(FileHandle {
             mnt_id: mount_id as MountId,
             handle: c_fh,
