@@ -721,11 +721,7 @@ impl PassthroughFs {
     ///
     /// When the filesystem does not support file handles, this is logged (as a warning in
     /// `Prefer` mode, and as an error in `Mandatory` mode) one time per filesystem.
-    fn get_file_handle_opt(
-        &self,
-        fd: &impl AsRawFd,
-        st: &StatExt,
-    ) -> io::Result<Option<FileHandle>> {
+    fn get_file_handle_opt(&self, fd: impl AsFd, st: &StatExt) -> io::Result<Option<FileHandle>> {
         let handle = match self.cfg.inode_file_handles {
             InodeFileHandlesMode::Never => {
                 // Let's make this quick, so we can skip this case below
@@ -792,7 +788,7 @@ impl PassthroughFs {
     fn make_file_handle_openable(&self, fh: &FileHandle) -> io::Result<OpenableFileHandle> {
         // self.mount_fds won't be None if we enter here.
         fh.to_openable(self.mount_fds.as_ref().unwrap(), |fd, flags| {
-            reopen_fd_through_proc(&fd, flags, &self.proc_self_fd)
+            reopen_fd_through_proc(fd, flags, &self.proc_self_fd)
         })
         .map_err(|e| {
             if !e.silent() {
