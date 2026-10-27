@@ -4,6 +4,7 @@
 use crate::util::{other_io_error, ErrorContext, ResultErrorContext};
 use std::ffi::{CStr, CString};
 use std::fs::File;
+use std::os::fd::AsFd;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::{fmt, io};
 
@@ -98,10 +99,10 @@ pub(crate) enum FdPathError {
 
 /// Looks up an FD's path through /proc/self/fd
 pub(crate) fn get_path_by_fd(
-    fd: &impl AsRawFd,
-    proc_self_fd: &impl AsRawFd,
+    fd: impl AsFd,
+    proc_self_fd: impl AsFd,
 ) -> Result<CString, FdPathError> {
-    let fname = format!("{}\0", fd.as_raw_fd());
+    let fname = format!("{}\0", fd.as_fd().as_raw_fd());
     let fname_cstr = CStr::from_bytes_with_nul(fname.as_bytes()).unwrap();
 
     let max_len = libc::PATH_MAX as usize; // does not include final NUL byte
@@ -109,7 +110,7 @@ pub(crate) fn get_path_by_fd(
 
     let ret = unsafe {
         libc::readlinkat(
-            proc_self_fd.as_raw_fd(),
+            proc_self_fd.as_fd().as_raw_fd(),
             fname_cstr.as_ptr(),
             link_target.as_mut_ptr().cast::<libc::c_char>(),
             max_len,
@@ -168,7 +169,8 @@ impl std::error::Error for FdPathError {}
 /// show the user.  If `proc_self_fd` is given, try to obtain the actual path through the symlink
 /// in /proc/self/fd; otherwise (or on error), just print the integer representation (as
 /// "{fd:%i}").
-pub fn printable_fd(fd: &impl AsRawFd, proc_self_fd: Option<&impl AsRawFd>) -> String {
+pub fn printable_fd(fd: impl AsFd, proc_self_fd: Option<impl AsFd>) -> String {
+    let fd = fd.as_fd();
     if let Some(Ok(path)) = proc_self_fd.map(|psf| get_path_by_fd(fd, psf)) {
         match path.into_string() {
             Ok(s) => s,

@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::fs::File;
 use std::io::{self, Read, Seek};
+use std::os::fd::AsFd;
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 use std::sync::{Arc, Mutex, RwLock, Weak};
 
@@ -54,15 +55,15 @@ impl MountFd {
      * the migration source, not here, on the destination; that’s why the `MountFd` object’s mount
      * ID is taken from `statx()` instead of using the source’s ID.)
      */
-    pub fn new<D: AsRawFd>(
+    pub fn new<D: AsFd>(
         mount_fds: Option<&MountFds>,
         dir: &D,
         path: &str,
     ) -> io::Result<Arc<MountFd>> {
         // Not documented in the man page, but mount FDs must be opened with `O_RDONLY` (not just
         // `O_PATH`)
-        let file =
-            openat(dir, path, libc::O_RDONLY).err_context(|| format!("Failed to open {path}"))?;
+        let file = openat(&dir.as_fd(), path, libc::O_RDONLY)
+            .err_context(|| format!("Failed to open {path}"))?;
         let st = statx(&file, None).err_context(|| format!("Failed to get {path}'s mount ID"))?;
 
         if let Some(mount_fds) = mount_fds {

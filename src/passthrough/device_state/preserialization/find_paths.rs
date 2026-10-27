@@ -15,7 +15,7 @@ use std::convert::{TryFrom, TryInto};
 use std::ffi::{CStr, CString};
 use std::fmt::{self, Display};
 use std::io;
-use std::os::unix::io::AsRawFd;
+use std::os::fd::AsFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -214,7 +214,7 @@ impl<'a> Constructor<'a> {
     /// any corresponding `InodeData` there, its `.migration_info` is set accordingly.
     /// For all directories (and directories only), return a strong reference to an inode in our
     /// store that can be used to recurse further.
-    fn discover<F: AsRawFd>(
+    fn discover<F: AsFd>(
         &self,
         parent_reference: &StrongInodeReference,
         parent_fd: &F,

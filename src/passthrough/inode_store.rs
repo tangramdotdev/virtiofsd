@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::fs::File;
 use std::ops::Deref;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -230,6 +231,15 @@ impl AsRawFd for InodeFile<'_> {
         match self {
             Self::Owned(file) => file.as_raw_fd(),
             Self::Ref(file_ref) => file_ref.as_raw_fd(),
+        }
+    }
+}
+
+impl AsFd for InodeFile<'_> {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        match self {
+            Self::Owned(file) => file.as_fd(),
+            Self::Ref(file_ref) => file_ref.as_fd(),
         }
     }
 }
