@@ -11,7 +11,7 @@
 
 use std::fs::File;
 use std::io;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -96,6 +96,12 @@ impl GuestFile {
     /// Get the inner file.
     pub fn get_file(&self) -> &File {
         &self.file
+    }
+}
+
+impl AsFd for GuestFile {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.file.as_fd()
     }
 }
 
