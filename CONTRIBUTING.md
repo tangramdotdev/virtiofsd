@@ -56,6 +56,10 @@ This ensures tools like `git bisect` remain useful: a binary search across commi
 history only works when every intermediate commit is a buildable, functional state of
 the project.
 
+Run `contrib/per-commit-check.sh` before submitting a merge request. The script
+checks each commit in your branch for build failures, test failures, clippy
+warnings, and formatting issues. It restores your branch when done.
+
 ### Practical implications
 
 - Don't add a reference to a module in one commit and the module itself in the next
