@@ -7,6 +7,7 @@ use std::ffi::CStr;
 use std::io;
 use std::mem::size_of;
 use std::ops::{Deref, DerefMut};
+use std::os::fd::AsFd;
 use std::os::unix::io::AsRawFd;
 
 use log::debug;
@@ -37,11 +38,16 @@ impl<P: DerefMut<Target = [u8]>> ReadDir<P> {
     /// high bit set), the `u64`-to-`off64_t` cast produces a negative value,
     /// which the kernel rejects. In that case we fall back to scan from the
     /// beginning and move forward to the target cookie.
-    pub fn new<D: AsRawFd>(dir: &D, offset: u64, buf: P) -> io::Result<Self> {
+    pub fn new(dir: impl AsFd, offset: u64, buf: P) -> io::Result<Self> {
         // SAFETY: Safe because this doesn't modify any memory and we check the return value.
         // The possible wrapping of the `u64` to `i64` cast is intended.
-        let res =
-            unsafe { libc::lseek64(dir.as_raw_fd(), offset as libc::off64_t, libc::SEEK_SET) };
+        let res = unsafe {
+            libc::lseek64(
+                dir.as_fd().as_raw_fd(),
+                offset as libc::off64_t,
+                libc::SEEK_SET,
+            )
+        };
         if res >= 0 {
             return unsafe { Self::new_no_seek(dir, buf) };
         }
@@ -59,7 +65,8 @@ impl<P: DerefMut<Target = [u8]>> ReadDir<P> {
 
     /// Fallback for offsets that `lseek64` cannot handle: rewinds and walks
     /// entries until the target cookie.
-    fn new_walk_to<D: AsRawFd>(dir: &D, target_offset: u64, mut buf: P) -> io::Result<Self> {
+    fn new_walk_to(dir: impl AsFd, target_offset: u64, mut buf: P) -> io::Result<Self> {
+        let dir = dir.as_fd();
         // SAFETY: Safe because this doesn't modify any memory and we check the return value.
         let res = unsafe { libc::lseek64(dir.as_raw_fd(), 0, libc::SEEK_SET) };
         if res < 0 {
@@ -104,13 +111,13 @@ impl<P: DerefMut<Target = [u8]>> ReadDir<P> {
     /// # Safety
     /// Caller must ensure the current position is valid, for example, by exclusively using this
     /// function on a given FD, potentially repeatedly.
-    pub unsafe fn new_no_seek<D: AsRawFd>(dir: &D, mut buf: P) -> io::Result<Self> {
+    pub unsafe fn new_no_seek(dir: impl AsFd, mut buf: P) -> io::Result<Self> {
         // Safe because the kernel guarantees that it will only write to `buf` and we check the
         // return value.
         let res = unsafe {
             libc::syscall(
                 libc::SYS_getdents64,
-                dir.as_raw_fd(),
+                dir.as_fd().as_raw_fd(),
                 buf.as_mut_ptr() as *mut LinuxDirent64,
                 buf.len() as libc::c_int,
             )

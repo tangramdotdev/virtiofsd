@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::fs::File;
 use std::io::{self, Read, Seek};
-use std::os::fd::AsFd;
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::fd::{AsFd, BorrowedFd};
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::sync::{Arc, Mutex, RwLock, Weak};
 
 pub struct MountFd {
@@ -264,7 +264,7 @@ impl MountFds {
 
     pub fn get<F>(&self, mount_id: MountId, reopen_fd: F) -> MPRResult<Arc<MountFd>>
     where
-        F: FnOnce(RawFd, libc::c_int) -> io::Result<File>,
+        F: FnOnce(BorrowedFd<'_>, libc::c_int) -> io::Result<File>,
     {
         let existing_mount_fd = self
             .map
@@ -335,7 +335,7 @@ impl MountFds {
 
             // Now that we know that this is a regular file or directory, really open it
             let file = reopen_fd(
-                mount_point_path.as_raw_fd(),
+                mount_point_path.as_fd(),
                 libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
             )
             .map_err(|e| {

@@ -12,7 +12,7 @@ use std::ffi::CStr;
 use std::fmt::{self, Display};
 use std::fs::File;
 use std::io;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::fd::{AsFd, BorrowedFd};
 use std::sync::Arc;
 
 const EMPTY_CSTR: &[u8] = b"\0";
@@ -46,7 +46,7 @@ pub enum FileOrHandle {
 impl FileHandle {
     /// Try to create a file handle for the given file.  In contrast to `from_name_at()`, this will
     /// always return a file handle or an error.
-    pub fn from_name_at_fail_hard(dir: &impl AsRawFd, path: &CStr) -> io::Result<Self> {
+    pub fn from_name_at_fail_hard(dir: impl AsFd, path: &CStr) -> io::Result<Self> {
         let mut mount_id: libc::c_int = 0;
         let mut c_fh = oslib::CFileHandle::default();
 
@@ -66,7 +66,7 @@ impl FileHandle {
     /// returns `Ok(Some)` at some point, it will never return `Ok(None)` later.
     ///
     /// Return an `io::Error` for all other errors.
-    pub fn from_name_at(dir: &impl AsRawFd, path: &CStr) -> io::Result<Option<Self>> {
+    pub fn from_name_at(dir: impl AsFd, path: &CStr) -> io::Result<Option<Self>> {
         match Self::from_name_at_fail_hard(dir, path) {
             Ok(fh) => Ok(Some(fh)),
             Err(err) => match err.raw_os_error() {
@@ -82,7 +82,7 @@ impl FileHandle {
 
     /// Try to create a file handle for `fd`.  In contrast to `from_fd()`, this will always return
     /// a file handle or an error.
-    pub fn from_fd_fail_hard(fd: &impl AsRawFd) -> io::Result<Self> {
+    pub fn from_fd_fail_hard(fd: impl AsFd) -> io::Result<Self> {
         // Safe because this is a constant value and a valid C string.
         let empty_path = unsafe { CStr::from_bytes_with_nul_unchecked(EMPTY_CSTR) };
         Self::from_name_at_fail_hard(fd, empty_path)
@@ -90,7 +90,7 @@ impl FileHandle {
 
     /// Create a file handle for `fd`.
     /// This is a wrapper around `from_name_at()` and so has the same interface.
-    pub fn from_fd(fd: &impl AsRawFd) -> io::Result<Option<Self>> {
+    pub fn from_fd(fd: impl AsFd) -> io::Result<Option<Self>> {
         // Safe because this is a constant value and a valid C string.
         let empty_path = unsafe { CStr::from_bytes_with_nul_unchecked(EMPTY_CSTR) };
         Self::from_name_at(fd, empty_path)
@@ -108,7 +108,7 @@ impl FileHandle {
         reopen_fd: F,
     ) -> MPRResult<OpenableFileHandle>
     where
-        F: FnOnce(RawFd, libc::c_int) -> io::Result<File>,
+        F: FnOnce(BorrowedFd<'_>, libc::c_int) -> io::Result<File>,
     {
         Ok(OpenableFileHandle {
             handle: self.clone(),

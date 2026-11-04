@@ -399,7 +399,7 @@ mod filehandle {
 pub use filehandle::CFileHandle;
 
 pub fn name_to_handle_at(
-    dirfd: &impl AsRawFd,
+    dirfd: impl AsFd,
     pathname: &CStr,
     file_handle: &mut CFileHandle,
     mount_id: &mut libc::c_int,
@@ -410,7 +410,7 @@ pub fn name_to_handle_at(
     // valid reference to an `int`
     check_retval(unsafe {
         filehandle::name_to_handle_at(
-            dirfd.as_raw_fd(),
+            dirfd.as_fd().as_raw_fd(),
             pathname.as_ptr(),
             file_handle,
             mount_id,

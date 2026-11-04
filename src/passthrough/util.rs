@@ -40,7 +40,7 @@ pub fn openat_verbose(dir_fd: &impl AsRawFd, path: &str, flags: libc::c_int) -> 
 /// Open `/proc/self/fd/{fd}` with the given flags to effectively duplicate the given `fd` with new
 /// flags (e.g. to turn an `O_PATH` file descriptor into one that can be used for I/O).
 pub fn reopen_fd_through_proc(
-    fd: &impl AsRawFd,
+    fd: impl AsFd,
     flags: libc::c_int,
     proc_self_fd: &File,
 ) -> io::Result<File> {
@@ -48,7 +48,7 @@ pub fn reopen_fd_through_proc(
     // to get the file.
     openat(
         proc_self_fd,
-        format!("{}", fd.as_raw_fd()).as_str(),
+        format!("{}", fd.as_fd().as_raw_fd()).as_str(),
         flags & !libc::O_NOFOLLOW,
     )
 }
