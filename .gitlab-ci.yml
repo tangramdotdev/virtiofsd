@@ -5,6 +5,28 @@ workflow:
 
 image: "rust:alpine"
 
+# Check that every commit in a merge request builds, passes tests,
+# and has no clippy or formatting issues. This ensures bisectability.
+per-commit-check:
+  variables:
+    # Disable shallow clone so git rev-list can enumerate all MR commits.
+    GIT_DEPTH: 0
+    CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
+    RUSTFLAGS: '-C target-feature=+crt-static -C link-self-contained=yes'
+    LIBSECCOMP_LINK_TYPE: static
+    LIBSECCOMP_LIB_PATH: /usr/lib
+    LIBCAPNG_LINK_TYPE: static
+    LIBCAPNG_LIB_PATH: /usr/lib
+  interruptible: true
+  before_script:
+    - apk add git musl-dev libcap-ng-static libseccomp-static
+    - rustup component add clippy rustfmt
+  script:
+    - contrib/per-commit-check.sh "${CI_MERGE_REQUEST_DIFF_BASE_SHA}"
+  rules:
+    # Run only for merge requests.
+    - if: $CI_MERGE_REQUEST_ID
+
 clippy:
   before_script:
     - apk add musl-dev
